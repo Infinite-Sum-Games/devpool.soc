@@ -30,24 +30,28 @@ otherwise fail and the bot would return with an unhappy message :(
 Use this command to punish contributors for misbehavior. Working pattern is 
 same as the previously mentioned bounty command.
 
-### 5. `/bug` - Maintainer ONLY Command
+### 5. `/bug @github-username` - Maintainer ONLY Command
 Use this command in an "issue" only to accept a bug report. This allows a 
 contributor to be eligible for the "bug-hunting" related achievement badges.
 
-### 6. `/impact` - Maintainer ONLY Command
+### 6. `/impact @github-username` - Maintainer ONLY Command
 Use this command to mark a pull request as a "high-impact" contribution so that 
 the contributor is eligible for the corresponding achievement badge.
 
-### 7. `/doc` - Maintainer ONLY Command
+### 7. `/doc @github-username` - Maintainer ONLY Command
 Use this command to mark a pull request as a "documentation" contribution. This
 allows a contributor to be eligible for documentation-related achievement 
 badges.
 
-### 8. `/test` - Maintainer ONLY Command
+### 8. `/test @github-username` - Maintainer ONLY Command
 Use this command to mark a pull request as a "testing" contribution. This allows
 a contributor to be eligible for testing-related achievement badges.
 
-### 9. `/extend <day-count> @github-username` - Maintainer ONLY Command
+### 9. `/help @github-username` - Maintainer ONLY Command
+Use this command to mark a contributor as a helper. Can be used in both issues 
+as well as pull-requests.
+
+### 10. `/extend <day-count> @github-username` - Maintainer ONLY Command
 Use this command to provide an extension of few days to a contributor. This 
 has to be done manually. The contributor can reach out to the maintainer via 
 discussion channels.
@@ -57,11 +61,8 @@ discussion channels.
 ```bash
 git clone https://github.com/Infinite-Sum-Games/devpool
 ```
-2. Populate the `config.sample.toml` file with appropriate credentials and 
-rename it to `config.toml`.
-```bash
-mv config.sample.toml config.toml # rename in Unix/Linux
-```
+2. Populate the `.env.example` file with appropriate credentials and 
+rename it to `.env`.
 3. Setup Redis / Valkey along with Redis-Insight. This setup is automatically 
 handled for you if you are running `docker-compose` from 
 [Infinite-Sum-Games/pulse](https://github.com/Infinite-Sum-Games/pulse).
