@@ -97,7 +97,7 @@ func ReadLastEntry(table string) (*Entry, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	query := `SELECT id, stream_id, processed FROM ` + tableName + ` ORDER BY id DESC LIMIT 1`
+	query := `SELECT id, stream_id, processed FROM ` + tableName + ` WHERE processed = TRUE ORDER BY id DESC LIMIT 1`
 	row := localDb.QueryRowContext(ctx, query)
 
 	var entry Entry
