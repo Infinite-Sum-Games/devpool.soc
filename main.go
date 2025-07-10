@@ -9,7 +9,7 @@ import (
 var (
 	App    *AppConfig
 	Valkey *redis.Client
-	bs     *BotMux
+	mux    *BotMux
 )
 
 func main() {
