@@ -10,7 +10,7 @@ import (
 
 type IssueAction struct {
 	ParticipantUsername string `json:"github_username"`
-	Url                 string `json:"issue_url"`
+	Url                 string `json:"url"`
 	Claim               bool   `json:"claimed"`
 	Extend              bool   `json:"extend"`
 }
@@ -18,20 +18,23 @@ type IssueAction struct {
 type BountyAction struct {
 	ParticipantUsername string `json:"github_username"`
 	Amount              int    `json:"amount"`
+	Url                 string `json:"url"`
+	Action              string `json:"action"`
 }
 
 type Achievement struct {
 	ParticipantUsername string `json:"github_username"`
+	Url                 string `json:"url"`
 	Type                string `json:"type"`
 }
 
 type Solution struct {
-	Username string `json:"github_username"`
-	Url      string `json:"pull_request_url"`
-	Merged   bool   `json:"merged"`
+	ParticipantUsername string `json:"github_username"`
+	Url                 string `json:"pull_request_url"`
+	Merged              bool   `json:"merged"`
 }
 
-func ReadIssueStream(bs *BotServer) {
+func ReadIssueStream(bm *BotMux) {
 	lastEntry, err := ReadLastEntry("issue")
 	if err != nil {
 		Log.Error("Could not setup read-issue streeam", err)
@@ -80,15 +83,16 @@ func ReadIssueStream(bs *BotServer) {
 						Log.Error("Failed to unmarshal JSON at issue-stream", err)
 						continue
 					}
+					mux.IssueClaim <- result
+					Log.Info("Successfully sent issue-action-result to mux.")
 				}
-				// TODO: Send it to the bot for beaming a message to GitHub
 			}
 		}
 		// End of processing, reading next stream element
 	}
 }
 
-func ReadBountyStream(bs *BotServer) {
+func ReadBountyStream(bs *BotMux) {
 	lastEntry, err := ReadLastEntry("bounty")
 	if err != nil {
 		Log.Error("Could not setup read-bounty stream", err)
@@ -137,15 +141,16 @@ func ReadBountyStream(bs *BotServer) {
 						Log.Error("Failed to unmarshal JSON at bounty-stream", err)
 						continue
 					}
+					mux.Bounty <- result
+					Log.Info("Successfully sent bounty-result to mux.")
 				}
-				// TODO: Send it to the bot for beaming a message to GitHub
 			}
 		}
 		// End of processing, reading next stream element
 	}
 }
 
-func ReadSolutionStream(bs *BotServer) {
+func ReadSolutionStream(bs *BotMux) {
 	lastEntry, err := ReadLastEntry("solution")
 	if err != nil {
 		Log.Error("Could not setup read-solution stream", err)
@@ -194,15 +199,16 @@ func ReadSolutionStream(bs *BotServer) {
 						Log.Error("Failed to unmarshal JSON at solution-merged-stream", err)
 						continue
 					}
+					mux.Solution <- result
+					Log.Info("Successfully sent solution-result to mux.")
 				}
-				// TODO: Send it to the bot for beaming a message to GitHub
 			}
 		}
 		// End of processing, reading next stream element
 	}
 }
 
-func ReadAchivementStream(bs *BotServer) {
+func ReadAchivementStream(bs *BotMux) {
 	lastEntry, err := ReadLastEntry("achivement")
 	if err != nil {
 		Log.Error("Could not setup read-achivement streeam", err)
@@ -251,8 +257,9 @@ func ReadAchivementStream(bs *BotServer) {
 						Log.Error("Failed to unmarshal JSON at automatic-events-stream", err)
 						continue
 					}
+					mux.Achievement <- result
+					Log.Info("Successfully sent achivement-result to mux.")
 				}
-				// TODO: Send it to the bot for beaming a message to GitHub
 			}
 		}
 		// End of processing, reading next stream element
