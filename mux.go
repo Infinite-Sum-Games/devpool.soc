@@ -29,10 +29,9 @@ func (bm *BotMux) Start() {
 			bm.Mutex.Lock()
 			if issue.Extend == true {
 				ManageExtension(issue.ParticipantUsername, issue.Url)
-				bm.Mutex.Unlock()
-				continue
+			} else {
+				ManageIssueClaim(issue.ParticipantUsername, issue.Claim, issue.Url)
 			}
-			ManageIssueClaim(issue.ParticipantUsername, issue.Url, issue.Claim)
 			bm.Mutex.Unlock()
 		case cash := <-bm.Bounty:
 			bm.Mutex.Lock()
