@@ -13,6 +13,7 @@ type AppConfig struct {
 	RedisPort      int
 	RedisUsername  string
 	RedisPassword  string
+	DatabaseUrl    string
 }
 
 func NewAppConfig() (*AppConfig, error) {
@@ -31,6 +32,7 @@ func NewAppConfig() (*AppConfig, error) {
 		RedisPort:      viper.GetInt("REDIS_PORT"),
 		RedisUsername:  viper.GetString("REDIS_USERNAME"),
 		RedisPassword:  viper.GetString("REDIS_PASSWORD"),
+		DatabaseUrl:    viper.GetString("DATABASE_URL"),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -48,5 +50,6 @@ func (c *AppConfig) Validate() error {
 		v.Field(&c.RedisPort, v.Required, v.Min(1), v.Max(65535)),
 		v.Field(&c.RedisUsername, v.Required),
 		v.Field(&c.RedisPassword, v.Required),
+		v.Field(&c.DatabaseUrl, v.Required),
 	)
 }
