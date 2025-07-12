@@ -2,17 +2,24 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/google/go-github/v62/github"
 	"golang.org/x/oauth2"
 )
 
-const (
-	IssueOnboard = `Howdy contributors, listen up! This issue is under the 
-	watchful gaze of DevPool (official bot of Summer of Code, 2025). Wanna tackle
-	this one ? Just shout "/assign" in the comments and you can fork the repository
-	and start working AFTER my confirmation.`
+type GitHubInfo struct {
+	RepoOwner string
+	RepoName  string
+	Type      string
+	Number    int
+}
 
+const (
 	IssueClaimed = `Alright @%s! Consider yourself officially assigned as of 
 	%s. If you are thinking, "Whoa, hold up, I didn't sign up for this," no 
 	worries, just yell "/unassign" and we can pretend this never happened. But 
@@ -55,6 +62,8 @@ const (
 
 	PenaltyDelivered = `Looks like someone took an L today. Chin up, buttercup! 
 	There is always a next time to, NOT get a penalty :')`
+
+	ExtensionGranted = `Oh you need an extension ? `
 )
 
 func postComment(ctx context.Context, installationToken, owner, repo string,
@@ -65,7 +74,7 @@ func postComment(ctx context.Context, installationToken, owner, repo string,
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
-	if sink == "issue" {
+	if sink == "issues" {
 		comment := &github.IssueComment{
 			Body: github.String(cmt),
 		}
@@ -85,4 +94,60 @@ func postComment(ctx context.Context, installationToken, owner, repo string,
 		}
 	}
 	return nil
+}
+
+func ParseGitHubURL(rawURL string) (*GitHubInfo, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
+	}
+	if parsedURL.Host != "github.com" {
+		return nil, fmt.Errorf("not a github.com URL: %s", rawURL)
+	}
+
+	// Split the path into components
+	// ["Infinite-Sum-Games", "platform.soc", "issues", "62"]
+	pathParts := strings.Split(parsedURL.Path, "/")
+
+	// Format: /owner/repo/issues(or pull)/number
+	if len(pathParts) < 4 {
+		return nil, fmt.Errorf("invalid GitHub issue URL format: not enough path components in %s", rawURL)
+	}
+
+	// Validate the "issues" and "pull" part
+	if pathParts[2] != "issues" && pathParts[2] != "pull" {
+		return nil, fmt.Errorf("invalid GitHub issue URL format: expected 'issues/pull' but got '%s' in %s", pathParts[2], rawURL)
+	}
+
+	// Extract owner, repo, and number
+	owner := pathParts[0]
+	repo := pathParts[1]
+	issueNumStr := pathParts[3]
+
+	// Convert issue number string to integer
+	issueNum, err := strconv.Atoi(issueNumStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert number '%s' to integer: %w", issueNumStr, err)
+	}
+
+	return &GitHubInfo{
+		RepoOwner: owner,
+		RepoName:  repo,
+		Type:      pathParts[2],
+		Number:    issueNum,
+	}, nil
+}
+
+func NewInstallationToken(repoUrl string) string {
+	return ""
+}
+
+func FetchInstallationToken(repoUrl string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	token, err := Valkey.HGet(ctx, "repo-token-set", repoUrl).Result()
+	if err != nil {
+		return "", err // Might be Redis.Nil if token does not exist
+	}
+	return token, nil
 }
