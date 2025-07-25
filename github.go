@@ -2,12 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/IAmRiteshKoushik/devpool/db"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/google/go-github/v62/github"
 	"golang.org/x/oauth2"
 )
@@ -17,6 +22,11 @@ type GitHubInfo struct {
 	RepoName  string
 	Type      string
 	Number    int
+}
+
+type InstallationTokenResp struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 const (
@@ -36,7 +46,7 @@ const (
 	makes things easier for the poor schmucks.(unlike me, the a 100x dev)`
 
 	HighImpact = `Consider my tiny, shriveled heart officially impressed. Now, go 
-	and grab yourself a latte. You have earned it!`
+	and grab yourself a latte @%s. You have earned it!`
 
 	BugReport = `Well, well, @%s been paying attention! A bug, you say? 
 	Is it squishy? Does it glow? Anyway, good job finding it! Bug report accepted!`
@@ -60,10 +70,11 @@ const (
 	BountyDelivered = `Another day, another coin. Way to get that bounty @%s you 
 	glorious keyboard-tapping, coffee-sipping, vibe-coding witcher!`
 
-	PenaltyDelivered = `Looks like someone took an L today. Chin up, buttercup! 
+	PenaltyDelivered = `Looks like someone took an L today. Chin up, @%s! 
 	There is always a next time to, NOT get a penalty :')`
 
-	ExtensionGranted = `Oh you need an extension ? `
+	ExtensionGranted = `Alright @%s! I'm giving you an extension. Don't screw it 
+	up, or I'm telling Cable you need a dial-up.`
 )
 
 func postComment(ctx context.Context, installationToken, owner, repo string,
@@ -111,7 +122,7 @@ func ParseGitHubURL(rawURL string) (*GitHubInfo, error) {
 
 	// Format: /owner/repo/issues(or pull)/number
 	if len(pathParts) < 4 {
-		return nil, fmt.Errorf("invalid GitHub issue URL format: not enough path components in %s", rawURL)
+		return nil, fmt.Errorf("invalid GitHub issue/pull URL format: not enough path components in %s", rawURL)
 	}
 
 	// Validate the "issues" and "pull" part
@@ -127,7 +138,10 @@ func ParseGitHubURL(rawURL string) (*GitHubInfo, error) {
 	// Convert issue number string to integer
 	issueNum, err := strconv.Atoi(issueNumStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert number '%s' to integer: %w", issueNumStr, err)
+		return nil, fmt.Errorf("failed to convert number '%s' to integer: %w",
+			issueNumStr,
+			err,
+		)
 	}
 
 	return &GitHubInfo{
@@ -138,14 +152,81 @@ func ParseGitHubURL(rawURL string) (*GitHubInfo, error) {
 	}, nil
 }
 
-func NewInstallationToken(repoUrl string) string {
-	return ""
+func NewInstallationToken(repoUrl string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := Pool.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get connection from pool: %w", err)
+	}
+	defer conn.Release()
+
+	q := db.New()
+	installationID, err := q.GetInstallationIdQuery(ctx, conn, repoUrl)
+	if err != nil {
+		return "", fmt.Errorf("failed to get installation token from db: %w", err)
+	}
+
+	// Create a JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256,
+		jwt.RegisteredClaims{
+			Issuer:    fmt.Sprintf("%d", App.AppID),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-60 * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	)
+	jwtString, err := token.SignedString(PrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate JWT: %w", err)
+	}
+
+	// Create an API request
+	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens",
+		installationID.Int64)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+jwtString)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to request installation token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("unexpected status code: %d: %s",
+			resp.StatusCode, string(body))
+	}
+
+	var tokenResp InstallationTokenResp
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Re-populate cache in-case is does not exist
+	hash := "repo-token:" + repoUrl
+	value := tokenResp.Token
+	ttl := time.Until(tokenResp.ExpiresAt)
+	if err := Valkey.Set(ctx, hash, value, ttl).Err(); err != nil {
+		// Don't cancel the operation because Redis cache failed
+		Log.Error("failed to store token in cache", err)
+	}
+
+	return tokenResp.Token, nil
 }
 
 func FetchInstallationToken(repoUrl string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	token, err := Valkey.HGet(ctx, "repo-token-set", repoUrl).Result()
+	token, err := Valkey.Get(ctx, "repo-token:"+repoUrl).Result()
 	if err != nil {
 		return "", err // Might be Redis.Nil if token does not exist
 	}
