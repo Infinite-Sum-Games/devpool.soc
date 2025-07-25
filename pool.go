@@ -18,7 +18,7 @@ const (
 )
 
 func InitDB() (*pgxpool.Pool, error) {
-	connStr := App.DatabaseURL
+	connStr := App.DatabaseUrl
 
 	dbConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {

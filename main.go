@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rsa"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -8,10 +9,11 @@ import (
 )
 
 var (
-	App    *AppConfig
-	Valkey *redis.Client
-	mux    *BotMux
-	Pool   *pgxpool.Pool
+	App        *AppConfig
+	Valkey     *redis.Client
+	mux        *BotMux
+	Pool       *pgxpool.Pool
+	PrivateKey *rsa.PrivateKey
 )
 
 func main() {
