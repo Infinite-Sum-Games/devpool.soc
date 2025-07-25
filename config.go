@@ -1,7 +1,12 @@
 package main
 
 import (
+	"crypto/rsa"
+	"fmt"
+	"os"
+
 	v "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 )
 
@@ -52,4 +57,16 @@ func (c *AppConfig) Validate() error {
 		v.Field(&c.RedisPassword, v.Required),
 		v.Field(&c.DatabaseUrl, v.Required),
 	)
+}
+
+func LoadPrivateKey() (*rsa.PrivateKey, error) {
+	privateKeyData, err := os.ReadFile(App.PrivateKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private key file: %w", err)
+	}
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+	return privateKey, nil
 }
